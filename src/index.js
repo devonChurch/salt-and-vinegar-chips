@@ -1,68 +1,75 @@
-const { ApolloServer, gql } = require('apollo-server');
+const { ApolloServer, gql } = require("apollo-server");
+const {
+  ApolloServerPluginLandingPageLocalDefault,
+} = require("apollo-server-core");
+const fetch = require("node-fetch");
 
-// A schema is a collection of type definitions (hence "typeDefs")
-// that together define the "shape" of queries that are executed against
-// your data.
 const typeDefs = gql`
-  # Comments in GraphQL strings (such as this one) start with the hash (#) symbol.
-
-  # This "Book" type defines the queryable fields for every book in our data source.
-  type Book {
-    title: String
-    author: String
+  type Environment {
+    href: String!
   }
 
-  # The "Query" type is special: it lists all of the available queries that
-  # clients can execute, along with the return type for each. In this
-  # case, the "books" query returns an array of zero or more Books (defined above).
+  type Environments {
+    live: Environment
+    staging: Environment
+    test: Environment
+    local: Environment
+  }
+
+  type Mfe {
+    key: String! # Interit from Object key
+    type: String!
+    name: String!
+    builds: [String]! # Async call to ep.builds.config.json
+    dependencies: [String]!
+    environments: Environments!
+  }
+
   type Query {
-    books: [Book]
+    mfes: [Mfe]
   }
 `;
 
-const books = [
-    {
-      title: 'The Awakening',
-      author: 'Kate Chopin',
-    },
-    {
-      title: 'City of Glass',
-      author: 'Paul Auster',
-    },
-  ];
-
-// Resolvers define the technique for fetching the types defined in the
-// schema. This resolver retrieves books from the "books" array above.
 const resolvers = {
-    Query: {
-      books: () => books,
-    },
-  };
+  Query: {
+    mfes: () => fetch(
+      "https://mfe-global-config.educationperfect.com/v0/ep.global.config.json"
+    )
+      .then((response) => response.json())
+      .then(items => 
+        Object.entries(items).filter(([key, values]) => values.type === "MFE_APP")
+        .map(([key, values]) => ({
+            ...values,
+            key,
+            builds: [], // Need to sort this out with an async request
+        }))    
+    ),
+  },
+};
 
-  const {
-    ApolloServerPluginLandingPageLocalDefault
-  } = require('apollo-server-core');
-  
-  // The ApolloServer constructor requires two parameters: your schema
-  // definition and your set of resolvers.
-  const server = new ApolloServer({
-    typeDefs,
-    resolvers,
-    // csrfPrevention: true,
-    // cache: 'bounded',
-    // /**
-    //  * What's up with this embed: true option?
-    //  * These are our recommended settings for using AS;
-    //  * they aren't the defaults in AS3 for backwards-compatibility reasons but
-    //  * will be the defaults in AS4. For production environments, use
-    //  * ApolloServerPluginLandingPageProductionDefault instead.
-    // **/
-    // plugins: [
-    //   ApolloServerPluginLandingPageLocalDefault({ embed: true }),
-    // ],
-  });
-  
-  // The `listen` method launches a web server.
-  server.listen().then(({ url }) => {
-    console.log(`🚀  Server ready at ${url}`);
-  });
+// The ApolloServer constructor requires two parameters: your schema
+// definition and your set of resolvers.
+const server = new ApolloServer({
+  typeDefs,
+  resolvers,
+
+  // This is an experiment, so let's let people have introspection capabilities in any context.
+  // @see https://www.apollographql.com/docs/apollo-server/api/apollo-server/#introspection
+  introspection: true,
+
+  // csrfPrevention: true,
+  // cache: 'bounded',
+  // /**
+  //  * What's up with this embed: true option?
+  //  * These are our recommended settings for using AS;
+  //  * they aren't the defaults in AS3 for backwards-compatibility reasons but
+  //  * will be the defaults in AS4. For production environments, use
+  //  * ApolloServerPluginLandingPageProductionDefault instead.
+  // **/
+  plugins: [ApolloServerPluginLandingPageLocalDefault({ embed: true })],
+});
+
+// The `listen` method launches a web server.
+server.listen().then(({ url }) => {
+  console.log(`🚀  Server ready at ${url}`);
+});
