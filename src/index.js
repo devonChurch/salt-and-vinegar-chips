@@ -31,12 +31,14 @@ const typeDefs = gql`
 
   type Query {
     mfes: [Mfe]
+    mfe(key: String): Mfe
   }
 `;
 
 const resolvers = {
   Query: {
-    mfes: (parent, args, context) => context.dataSources.globalConfigApi.getAllMfeItems()
+    mfes: (parent, args, context) => context.dataSources.globalConfigApi.getAllMfeItems(),
+    mfe: (parent, args, context) => context.dataSources.globalConfigApi.getMfeItemByKey(args.key)
   },
 
 //   Builds: () => ({
@@ -49,12 +51,16 @@ const globalConfigApi = (() => {
     const MFE_APP_TYPE = "MFE_APP";
 
     const getGlobalConfig = () => fetch(ENDPOINT).then((response) => response.json());
+
     const extractAndEnrichMfes = (globalConfigItems) => Object.entries(globalConfigItems)
         .filter(([key, values]) => values.type === MFE_APP_TYPE)
         .map(([key, values]) => ({ ...values, key, }));
 
+    const extractMfeByKey = (key) => (mfeItems) => mfeItems.find(item => item.key === key);
+
     return {
-        getAllMfeItems: () => getGlobalConfig().then(extractAndEnrichMfes)
+        getAllMfeItems: () => getGlobalConfig().then(extractAndEnrichMfes),
+        getMfeItemByKey: (key) => getGlobalConfig().then(extractAndEnrichMfes).then(extractMfeByKey(key)),
     }
 
 })();
