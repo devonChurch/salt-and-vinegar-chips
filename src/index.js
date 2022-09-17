@@ -5,9 +5,20 @@ const {
 const fetch = require("node-fetch");
 
 const typeDefs = gql`
+  type Metadata {
+    id: String!
+    source: String!
+  }
+
+  type Builds {
+    name: String!
+    href: String!
+    metadata: Metadata
+  }
+
   type Environment {
     href: String!
-    builds: [String]!
+    builds: [Builds!]!
   }
 
   type Environments {
@@ -40,7 +51,16 @@ const resolvers = {
   },
 
   Environment: {
-    builds: (parent, args, context, info) => context.dataSources.buildsMetadataApi.getBuildsByMfeHref(parent.href)
+    builds: (parent, args, context, info) =>
+      context.dataSources.buildsConfigApi.getBuildsByMfeHref(parent.href),
+  },
+
+  Builds: {
+    metadata: (parent, args, context, info) =>
+      console.log(parent, args, context, info) ||
+      context.dataSources.metadataConfigApi.getMetadataByMfeHrefAndBuildName(
+        parent.href, parent.name
+      ),
   },
 };
 
@@ -52,7 +72,7 @@ const createGlobalConfigApi = () => {
   const getGlobalConfig = () =>
     fetch(ENDPOINT).then((response) => response.json());
 
-  const extractAndEnrichMfes = (globalConfigItems) =>
+  const extractTransformAndEnrichData = (globalConfigItems) =>
     Object.entries(globalConfigItems)
       .filter(([key, values]) => values.type === MFE_APP_TYPE)
       .map(([key, values]) => ({ ...values, key }));
@@ -61,26 +81,53 @@ const createGlobalConfigApi = () => {
     mfeItems.find((item) => item.key === key);
 
   return {
-    getAllMfeItems: () => getGlobalConfig().then(extractAndEnrichMfes),
+    getAllMfeItems: () => getGlobalConfig().then(extractTransformAndEnrichData),
     getMfeItemByKey: (key) =>
-      getGlobalConfig().then(extractAndEnrichMfes).then(extractMfeByKey(key)),
+      getGlobalConfig()
+        .then(extractTransformAndEnrichData)
+        .then(extractMfeByKey(key)),
   };
 };
 
-const createBuildsMetadataApi = () => {
+const createBuildsConfigApi = () => {
   const createEndpoint = (mfeHref) => new URL("ep.builds.config.json", mfeHref);
 
-  const getBuildsMetadata = (mfeHref) =>
+  const getBuildsConfig = (mfeHref) =>
     fetch(createEndpoint(mfeHref)).then((response) => response.json());
 
+  const transformData = (mfeHref) => (buildItems) =>
+    buildItems.map((item) => ({ name: item, href: mfeHref }));
+
   return {
-    getBuildsByMfeHref: getBuildsMetadata,
+    getBuildsByMfeHref: (mfeHref) =>
+      getBuildsConfig(mfeHref).then(transformData(mfeHref)),
+  };
+};
+
+const createMetadataConfigApi = () => {
+  const createEndpoint = (mfeHref, buildName) =>
+    new URL(`${buildName}/ep.metadata.config.json`, mfeHref);
+
+  const getMetadataConfig = (mfeHref, buildName) =>
+    fetch(createEndpoint(mfeHref, buildName)).then((response) =>
+      response.json()
+    );
+
+  const transformData = (metadata) => ({
+    source: metadata.buildName,
+    id: metadata.buildId,
+  })
+
+  return {
+    getMetadataByMfeHrefAndBuildName: (mfeHref, buildName) =>
+      getMetadataConfig(mfeHref, buildName).then(transformData),
   };
 };
 
 const dataSources = () => ({
   globalConfigApi: createGlobalConfigApi(),
-  buildsMetadataApi: createBuildsMetadataApi(),
+  buildsConfigApi: createBuildsConfigApi(),
+  metadataConfigApi: createMetadataConfigApi(),
 });
 
 // The ApolloServer constructor requires two parameters: your schema
