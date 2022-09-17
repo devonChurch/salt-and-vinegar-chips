@@ -16,11 +16,15 @@ const typeDefs = gql`
     local: Environment
   }
 
+  type Builds {
+      metadata: [String]!
+  }
+
   type Mfe {
     key: String! # Interit from Object key
     type: String!
     name: String!
-    builds: [String]! # Async call to ep.builds.config.json
+    # builds: Builds! # Async call to ep.builds.config.json
     dependencies: [String]!
     environments: Environments!
   }
@@ -32,26 +36,39 @@ const typeDefs = gql`
 
 const resolvers = {
   Query: {
-    mfes: () => fetch(
-      "https://mfe-global-config.educationperfect.com/v0/ep.global.config.json"
-    )
-      .then((response) => response.json())
-      .then(items => 
-        Object.entries(items).filter(([key, values]) => values.type === "MFE_APP")
-        .map(([key, values]) => ({
-            ...values,
-            key,
-            builds: [], // Need to sort this out with an async request
-        }))    
-    ),
+    mfes: (parent, args, context) => context.dataSources.globalConfigApi.getAllMfeItems()
   },
+
+//   Builds: () => ({
+//       metadata: ["banana"]
+//   })
 };
+
+const globalConfigApi = (() => {
+    const ENDPOINT = "https://mfe-global-config.educationperfect.com/v0/ep.global.config.json";
+    const MFE_APP_TYPE = "MFE_APP";
+
+    const getGlobalConfig = () => fetch(ENDPOINT).then((response) => response.json());
+    const extractAndEnrichMfes = (globalConfigItems) => Object.entries(globalConfigItems)
+        .filter(([key, values]) => values.type === MFE_APP_TYPE)
+        .map(([key, values]) => ({ ...values, key, }));
+
+    return {
+        getAllMfeItems: () => getGlobalConfig().then(extractAndEnrichMfes)
+    }
+
+})();
+
+const dataSources = () => ({
+    globalConfigApi 
+})
 
 // The ApolloServer constructor requires two parameters: your schema
 // definition and your set of resolvers.
 const server = new ApolloServer({
   typeDefs,
   resolvers,
+  dataSources,
 
   // This is an experiment, so let's let people have introspection capabilities in any context.
   // @see https://www.apollographql.com/docs/apollo-server/api/apollo-server/#introspection
