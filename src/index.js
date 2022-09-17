@@ -7,6 +7,7 @@ const fetch = require("node-fetch");
 const typeDefs = gql`
   type Environment {
     href: String!
+    builds: [String]!
   }
 
   type Environments {
@@ -16,15 +17,10 @@ const typeDefs = gql`
     local: Environment
   }
 
-  type Builds {
-      metadata: [String]!
-  }
-
   type Mfe {
     key: String! # Interit from Object key
     type: String!
     name: String!
-    # builds: Builds! # Async call to ep.builds.config.json
     dependencies: [String]!
     environments: Environments!
   }
@@ -37,37 +33,55 @@ const typeDefs = gql`
 
 const resolvers = {
   Query: {
-    mfes: (parent, args, context) => context.dataSources.globalConfigApi.getAllMfeItems(),
-    mfe: (parent, args, context) => context.dataSources.globalConfigApi.getMfeItemByKey(args.key)
+    mfes: (parent, args, context) =>
+      context.dataSources.globalConfigApi.getAllMfeItems(),
+    mfe: (parent, args, context) =>
+      context.dataSources.globalConfigApi.getMfeItemByKey(args.key),
   },
 
-//   Builds: () => ({
-//       metadata: ["banana"]
-//   })
+  Environment: {
+    builds: (parent, args, context, info) => context.dataSources.buildsMetadataApi.getBuildsByMfeHref(parent.href)
+  },
 };
 
-const globalConfigApi = (() => {
-    const ENDPOINT = "https://mfe-global-config.educationperfect.com/v0/ep.global.config.json";
-    const MFE_APP_TYPE = "MFE_APP";
+const createGlobalConfigApi = () => {
+  const ENDPOINT =
+    "https://mfe-global-config.educationperfect.com/v0/ep.global.config.json";
+  const MFE_APP_TYPE = "MFE_APP";
 
-    const getGlobalConfig = () => fetch(ENDPOINT).then((response) => response.json());
+  const getGlobalConfig = () =>
+    fetch(ENDPOINT).then((response) => response.json());
 
-    const extractAndEnrichMfes = (globalConfigItems) => Object.entries(globalConfigItems)
-        .filter(([key, values]) => values.type === MFE_APP_TYPE)
-        .map(([key, values]) => ({ ...values, key, }));
+  const extractAndEnrichMfes = (globalConfigItems) =>
+    Object.entries(globalConfigItems)
+      .filter(([key, values]) => values.type === MFE_APP_TYPE)
+      .map(([key, values]) => ({ ...values, key }));
 
-    const extractMfeByKey = (key) => (mfeItems) => mfeItems.find(item => item.key === key);
+  const extractMfeByKey = (key) => (mfeItems) =>
+    mfeItems.find((item) => item.key === key);
 
-    return {
-        getAllMfeItems: () => getGlobalConfig().then(extractAndEnrichMfes),
-        getMfeItemByKey: (key) => getGlobalConfig().then(extractAndEnrichMfes).then(extractMfeByKey(key)),
-    }
+  return {
+    getAllMfeItems: () => getGlobalConfig().then(extractAndEnrichMfes),
+    getMfeItemByKey: (key) =>
+      getGlobalConfig().then(extractAndEnrichMfes).then(extractMfeByKey(key)),
+  };
+};
 
-})();
+const createBuildsMetadataApi = () => {
+  const createEndpoint = (mfeHref) => new URL("ep.builds.config.json", mfeHref);
+
+  const getBuildsMetadata = (mfeHref) =>
+    fetch(createEndpoint(mfeHref)).then((response) => response.json());
+
+  return {
+    getBuildsByMfeHref: getBuildsMetadata,
+  };
+};
 
 const dataSources = () => ({
-    globalConfigApi 
-})
+  globalConfigApi: createGlobalConfigApi(),
+  buildsMetadataApi: createBuildsMetadataApi(),
+});
 
 // The ApolloServer constructor requires two parameters: your schema
 // definition and your set of resolvers.
