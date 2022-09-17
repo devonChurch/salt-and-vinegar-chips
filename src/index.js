@@ -29,10 +29,10 @@ const typeDefs = gql`
   }
 
   type Mfe {
-    key: String! # Interit from Object key
+    key: String!
     type: String!
     name: String!
-    dependencies: [String]!
+    dependencies: [Mfe!]!
     environments: Environments!
   }
 
@@ -46,6 +46,7 @@ const resolvers = {
   Query: {
     mfes: (parent, args, context) =>
       context.dataSources.globalConfigApi.getAllMfeItems(),
+
     mfe: (parent, args, context) =>
       context.dataSources.globalConfigApi.getMfeItemByKey(args.key),
   },
@@ -57,11 +58,16 @@ const resolvers = {
 
   Builds: {
     metadata: (parent, args, context, info) =>
-      console.log(parent, args, context, info) ||
       context.dataSources.metadataConfigApi.getMetadataByMfeHrefAndBuildName(
         parent.href, parent.name
       ),
   },
+
+  Mfe: {
+    dependencies: (parent, args, context, info) =>
+        context.dataSources.globalConfigApi.getMfeItemsByKeys(parent.dependencies)
+  }
+
 };
 
 const createGlobalConfigApi = () => {
@@ -80,12 +86,19 @@ const createGlobalConfigApi = () => {
   const extractMfeByKey = (key) => (mfeItems) =>
     mfeItems.find((item) => item.key === key);
 
+  const extractMfeByKeys = (keys) => (mfeItems) =>
+    mfeItems.filter((item) => keys.includes(item.key));
+
   return {
     getAllMfeItems: () => getGlobalConfig().then(extractTransformAndEnrichData),
     getMfeItemByKey: (key) =>
       getGlobalConfig()
         .then(extractTransformAndEnrichData)
         .then(extractMfeByKey(key)),
+    getMfeItemsByKeys: (keys) =>
+      getGlobalConfig()
+        .then(extractTransformAndEnrichData)
+        .then(extractMfeByKeys(keys)),
   };
 };
 
@@ -140,16 +153,7 @@ const server = new ApolloServer({
   // This is an experiment, so let's let people have introspection capabilities in any context.
   // @see https://www.apollographql.com/docs/apollo-server/api/apollo-server/#introspection
   introspection: true,
-
-  // csrfPrevention: true,
-  // cache: 'bounded',
-  // /**
-  //  * What's up with this embed: true option?
-  //  * These are our recommended settings for using AS;
-  //  * they aren't the defaults in AS3 for backwards-compatibility reasons but
-  //  * will be the defaults in AS4. For production environments, use
-  //  * ApolloServerPluginLandingPageProductionDefault instead.
-  // **/
+  csrfPrevention: true,
   plugins: [ApolloServerPluginLandingPageLocalDefault({ embed: true })],
 });
 
