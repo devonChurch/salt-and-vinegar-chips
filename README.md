@@ -2,6 +2,10 @@
 
 A GraphQL Server that curates our static `.json` Micro Front-end configuration files into an interactive API.
 
+# 📺 Demo
+
+[![graphql api walkthrough](https://user-images.githubusercontent.com/15273233/190885196-3f4181cf-e6a4-4e5c-a1f9-4e95d4a89f18.png)](https://drive.google.com/file/d/1pHFHsq8-CdjQERQ6uW4JtRbAeGjtLoAF/view?usp=sharing)
+
 # 🤷 Why
 
 As our Micro Front-end inventory evolves and grows, our configuration data become richer yet commensurately harder to digest.
@@ -47,3 +51,7 @@ Our configuration data increases dramatically when orchestrating between multipl
 The total configuration surface area continues to grow substantially with each new Micro Front-end added to our architecture inventory.
 
 ![multiple micro front-ends](https://user-images.githubusercontent.com/15273233/190882847-4b48e085-8422-4a50-8b79-3127792bfe95.png)
+
+# 🎉 Thanks
+
+*GLHF!*
